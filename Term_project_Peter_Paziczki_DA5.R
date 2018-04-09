@@ -54,15 +54,32 @@ setnames(matData,
          c(paste(matCode)), 
          c("mmort"))
 
-# SEARCHING FOR DATA: Health expenditure, total (% of GDP)
-health_inds <- WDIsearch('adjusted')
-healthCode <- health_inds[match
+# SEARCHING FOR DATA: Adjusted savings education expenditure (% of GNI)
+edu_inds <- WDIsearch('adjusted')
+eduCode <- health_inds[match
                        ("Adjusted savings: education expenditure (% of GNI)", 
-                         health_inds[,2],1)]
+                         edu_inds[,2],1)]
+# DATA DOWNLOAD: Health expenditure, total (% of GDP)
+dat_edu = WDI(
+  indicator = eduCode, 
+  start = 1970, end = 2015)
+# FILTERING OUT REGIONS
+dt_edu <- data.table(dat_edu)
+exclusionList <- dt_edu[,.(itemCnt = .N),by = .(code = dt_edu$iso2c)][1:47, 1]
+eduData <- subset(dt_edu, !(dt_edu$iso2c %in%  exclusionList$code))
+setnames(eduData, 
+         c(paste(eduCode)), 
+         c("edu"))
+
+# SEARCHING FOR DATA: Health expenditure, total (% of GDP)
+health_inds <- WDIsearch('health')
+healthCode <- health_inds[match
+                          ("Health expenditure, total (% of GDP)", 
+                            health_inds[,2],1)]
 # DATA DOWNLOAD: Health expenditure, total (% of GDP)
 dat_health = WDI(
   indicator = healthCode, 
-  start = 1970, end = 2015)
+  start = 1995, end = 2014)
 # FILTERING OUT REGIONS
 dt_health <- data.table(dat_health)
 exclusionList <- dt_health[,.(itemCnt = .N),by = .(code = dt_health$iso2c)][1:47, 1]
@@ -482,9 +499,9 @@ grid.arrange(p8, p9)
 ols1995 <- lm(data = up[year == 1995], lnmmort ~ salaried)
 ols2007 <- lm(data = up[year == 2007], lnmmort ~ salaried)
 ols2014 <- lm(data = up[year == 2014], lnmmort ~ salaried)
-ols2007_c1 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhealth)
-ols2007_c2 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth)
-ols2007_c3 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnhdi)
+ols2007_c1 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhealth + lnpop)
+ols2007_c2 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnpop)
+ols2007_c3 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnpop + lnhdi)
 ols2007_c4 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhdi)
 
 
