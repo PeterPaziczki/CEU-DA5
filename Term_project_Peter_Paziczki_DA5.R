@@ -33,6 +33,9 @@ dat_wag = WDI(
 dt_wag <- data.table(dat_wag)
 exclusionList <- dt_wag[,.(itemCnt = .N),by = .(code = dt_wag$iso2c)][1:47, 1]
 wagData <- subset(dt_wag, !(dt_wag$iso2c %in%  exclusionList$code))
+setnames(wagData, 
+         c(paste(wagCode)), 
+         c("salaried"))
 
 # SEARCHING FOR DATA: Maternal mortality ratio (per 100,000 live births)
 mat_inds <- WDIsearch('fertility')
@@ -47,6 +50,9 @@ dat_mat = WDI(
 dt_mat <- data.table(dat_mat)
 exclusionList <- dt_mat[,.(itemCnt = .N),by = .(code = dt_mat$iso2c)][1:47, 1]
 matData <- subset(dt_mat, !(dt_mat$iso2c %in%  exclusionList$code))
+setnames(matData, 
+         c(paste(matCode)), 
+         c("mmort"))
 
 # SEARCHING FOR DATA: Health expenditure, total (% of GDP)
 health_inds <- WDIsearch('adjusted')
@@ -61,6 +67,9 @@ dat_health = WDI(
 dt_health <- data.table(dat_health)
 exclusionList <- dt_health[,.(itemCnt = .N),by = .(code = dt_health$iso2c)][1:47, 1]
 healthData <- subset(dt_health, !(dt_health$iso2c %in%  exclusionList$code))
+setnames(healthData, 
+         c(paste(healthCode)), 
+         c("health"))
 
 # SEARCHING FOR DATA: GDP per capita 
 gdp_inds <- WDIsearch('gdp')
@@ -74,6 +83,9 @@ dat = WDI(
 dt <- data.table(dat)
 exclusionList <-dt[,.(itemCnt=.N),by=.(code = dt$iso2c)][1:47,1]
 gdpData <- subset(dt, !(dt$iso2c %in%  exclusionList$code))
+setnames(gdpData, 
+         c(paste(gdpppCode)), 
+         c("gdppc"))
 
 # SEARCHING FOR DATA: Population, total
 pop_inds <- WDIsearch('population')
@@ -88,6 +100,9 @@ dat_pop = WDI(
 dt_pop <- data.table(dat_pop)
 exclusionList <- dt_pop[,.(itemCnt = .N),by = .(code = dt_pop$iso2c)][1:47, 1]
 popData <- subset(dt_pop, !(dt_pop$iso2c %in%  exclusionList$code))
+setnames(popData, 
+         c(paste(popCode)), 
+         c("pop"))
 
 # SEARCHING FOR DATA: Human Development index
 hdi_inds <- WDIsearch('hdi')
@@ -118,6 +133,9 @@ strTmp = c('country')
 dt_hdi <- dt_hdi[, (strTmp) := lapply(.SD, trimws), .SDcols = strTmp]
 str(dt_hdi)
 hdiData <- dt_hdi
+setnames(hdiData, 
+         c("count"), 
+         c("hdi"))
 
 # MERGING DATA INTO PANEL
 panelData_1 <- merge(wagData, gdpData,
@@ -145,7 +163,7 @@ panelData_5 <- merge(hdiData, panelData_3,
 # panelData_6 <- merge(panelData_3, panelData_4,
 #                      by.x = c("iso2c", "year","country"), 
 #                      by.y = c("iso2c", "year", "country") ) 
-panelData <- merge(panelData_2, panelData_3,
+panelData <- merge(panelData_2, panelData_5,
                    by.x = c("iso2c", "year","country"), 
                    by.y = c("iso2c", "year", "country") ) 
 
@@ -156,9 +174,9 @@ dt_wag <- NULL
 panelData$iso2c <- NULL
 
 up <- data.table(panelData)
-names(up) <- c('year', 'country', 'health', 'mmort', 'pop', 'salaried', 'gdppc')
+#names(up) <- c('year', 'country', 'health', 'mmort', 'pop', 'salaried', 'gdppc')
 up$pop <- up$pop/10^6 # Count the population in million
-up <- subset(up, up$year < 2017 & up$year > 1990)
+up <- subset(up, up$year < 2017 & up$year > 1960)
 
 # Fertility rate
 up_fertility <- data.table(panelData_4)
@@ -173,7 +191,8 @@ bp <- subset(up,
                !is.na(up$mmort) & 
                !is.na(up$pop) & 
                !is.na(up$gdppc) & 
-               !is.na(up$health)
+               !is.na(up$health) & 
+               !is.na(up$hdi)
 )
 
 bp %>%
@@ -199,12 +218,14 @@ world_trend <- up %>%
     salaried = weighted.mean(salaried, na.rm = TRUE),
     mmort = weighted.mean(mmort, w = pop, na.rm = TRUE),
     health = weighted.mean(health, w = pop, na.rm = TRUE),
-    gdppc = weighted.mean(gdppc, w = pop, na.rm = TRUE))
+    gdppc = weighted.mean(gdppc, w = pop, na.rm = TRUE),
+    hdi = weighted.mean(hdi, w = pop, na.rm = TRUE))
 
 world_trend$rellnsalaried = log(world_trend$salaried) - first(log(world_trend$salaried))
 world_trend$rellnhealth = log(world_trend$health) - first(log(world_trend$health))
 world_trend$rellngdp = log(world_trend$gdppc) - first(log(world_trend$gdppc))
 world_trend$rellnmmort = log(world_trend$mmort) - first(log(world_trend$mmort))
+world_trend$rellnhdi = log(world_trend$hdi) - first(log(world_trend$hdi))
 
 # checking world trends for fertility rate
 world_trend_fert <- up_fertility %>%
@@ -336,6 +357,7 @@ up$lngdppc <- log(up$gdppc)
 up$lnmmort <- log(up$mmort)
 up$lnpop <- log(up$pop)
 up$lnhealth <- log(up$health)
+up$lnhdi <- log(up$hdi)
 
 
 miss_lnmmort <- merge(up[, mean(mmort, na.rm = TRUE), by = country],
@@ -460,10 +482,13 @@ grid.arrange(p8, p9)
 ols1995 <- lm(data = up[year == 1995], lnmmort ~ salaried)
 ols2007 <- lm(data = up[year == 2007], lnmmort ~ salaried)
 ols2014 <- lm(data = up[year == 2014], lnmmort ~ salaried)
-ols2007_c <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhealth + lngdppc)
+ols2007_c1 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhealth)
+ols2007_c2 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth)
+ols2007_c3 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnhdi)
+ols2007_c4 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhdi)
 
 
-ols_models <- list(ols1995, ols2007, ols2014, ols2007_c)
+ols_models <- list(ols1995, ols2007, ols2014, ols2007_c1, ols2007_c2, ols2007_c3, ols2007_c4)
 
 cov_ols_1         <- vcovHC(ols1995, type = "HC1")
 rob_ols_1         <- sqrt(diag(cov_ols_1))
@@ -471,19 +496,25 @@ cov_ols_2         <- vcovHC(ols2007, type = "HC1")
 rob_ols_2         <- sqrt(diag(cov_ols_2))
 cov_ols_3         <- vcovHC(ols2014, type = "HC1")
 rob_ols_3         <- sqrt(diag(cov_ols_3))
-cov_ols_4         <- vcovHC(ols2007_c, type = "HC1")
+cov_ols_4         <- vcovHC(ols2007_c1, type = "HC1")
 rob_ols_4         <- sqrt(diag(cov_ols_4))
+cov_ols_5         <- vcovHC(ols2007_c2, type = "HC1")
+rob_ols_5         <- sqrt(diag(cov_ols_5))
+cov_ols_6         <- vcovHC(ols2007_c3, type = "HC1")
+rob_ols_6         <- sqrt(diag(cov_ols_6))
+cov_ols_7         <- vcovHC(ols2007_c4, type = "HC1")
+rob_ols_7         <- sqrt(diag(cov_ols_7))
 
 stargazer(
   title = "OLS models", 
-  list(ols1995, ols2007, ols2014, ols2007_c), digits = 2, 
-  column.labels = c('ols1995', 'ols2007', 'ols2014', 'ols2007c'),
+  list(ols1995, ols2007, ols2014, ols2007_c1, ols2007_c2, ols2007_c3, ols2007_c4), digits = 2, 
+  column.labels = c('ols1995', 'ols2007', 'ols2014', 'ols2007c1', 'ols2007c2', 'ols2007c3', 'ols2007c4'),
   model.names = FALSE,
   omit.stat = c("adj.rsq", "f"),
   dep.var.caption = 'Dependent variable: Maternal Mortality',
   out = "OLS.html",
   notes.align = "l",
-  se = list(rob_ols_1, rob_ols_2, rob_ols_3, rob_ols_4),
+  se = list(rob_ols_1, rob_ols_2, rob_ols_3, rob_ols_4, rob_ols_5, rob_ols_6, rob_ols_7),
   header = FALSE, 
   type ='latex'
 )
