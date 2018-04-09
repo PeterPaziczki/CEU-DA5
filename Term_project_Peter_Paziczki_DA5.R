@@ -16,8 +16,6 @@ library(dplyr)
 library(sandwich) 
 library(lmtest)
 
-# setwd("C:/Users/Keresztesi Luca/Box Sync/CEU 2nd trimester/Data Analysis 3/Term Project")
-
 # DOWNLOADING DATA THROUGH World Bank API-------------------------------------------------------
 
 # SEARCHING FOR DATA: Wage and salaried workers, female (% of female employed)
@@ -37,29 +35,42 @@ setnames(wagData,
          c(paste(wagCode)), 
          c("salaried"))
 
-# SEARCHING FOR DATA: Maternal mortality ratio (per 100,000 live births)
-mat_inds <- WDIsearch('fertility')
-matCode <- mat_inds[match
+# SEARCHING FOR DATA: Fertility rate, total (births per woman)
+fert_inds <- WDIsearch('fertility')
+fertCode <- fert_inds[match
                     ("Fertility rate, total (births per woman)", 
-                      mat_inds[,2],1)]
-# DATA DOWNLOAD: Maternal mortality ratio (per 100,000 live births)
-dat_mat = WDI(
-  indicator = matCode, 
+                      fert_inds[,2],1)]
+# DATA DOWNLOAD: Fertility rate, total (births per woman)
+dat_fert = WDI(
+  indicator = fertCode, 
   start = 1960, end = 2015)
 # FILTERING OUT REGIONS
-dt_mat <- data.table(dat_mat)
-exclusionList <- dt_mat[,.(itemCnt = .N),by = .(code = dt_mat$iso2c)][1:47, 1]
-matData <- subset(dt_mat, !(dt_mat$iso2c %in%  exclusionList$code))
-setnames(matData, 
-         c(paste(matCode)), 
-         c("mmort"))
+dt_fert <- data.table(dat_fert)
+exclusionList <- dt_fert[,.(itemCnt = .N),by = .(code = dt_fert$iso2c)][1:47, 1]
+fertData <- subset(dt_fert, !(dt_fert$iso2c %in%  exclusionList$code))
+setnames(fertData, 
+         c(paste(fertCode)), 
+         c("fert"))
+
+subset(fertData, fertData$year == 2015)
+summary(fertData_2015$fert)
+hist_2015 <- hist(fertData_2015$fert,
+     main = "Histogram of fertility rate in 2015",
+     xlab = "Fertility rate")
+
+subset(fertData, fertData$year == 1960)
+summary(fertData_1960$fert)
+hist_1960 <- hist(fertData_1960$fert,
+     main = "Histogram of fertility rate in 1960",
+     xlab = "Fertility rate")
+
 
 # SEARCHING FOR DATA: Adjusted savings education expenditure (% of GNI)
 edu_inds <- WDIsearch('adjusted')
-eduCode <- health_inds[match
+eduCode <- edu_inds[match
                        ("Adjusted savings: education expenditure (% of GNI)", 
                          edu_inds[,2],1)]
-# DATA DOWNLOAD: Health expenditure, total (% of GDP)
+# DATA DOWNLOAD: Adjusted savings education expenditure (% of GNI)
 dat_edu = WDI(
   indicator = eduCode, 
   start = 1970, end = 2015)
@@ -91,7 +102,9 @@ setnames(healthData,
 # SEARCHING FOR DATA: GDP per capita 
 gdp_inds <- WDIsearch('gdp')
 grep("2005", gdp_inds, value = TRUE )
-gdpppCode <- gdp_inds[match("GDP per capita, PPP (constant 2005 international $)",gdp_inds[,2]),1]
+gdpppCode <- gdp_inds[match
+                      ("GDP per capita, PPP (constant 2005 international $)",
+                        gdp_inds[,2]),1]
 # DATA DOWNLOAD: GDP per capita
 dat = WDI(
   indicator=gdpppCode, 
@@ -121,7 +134,7 @@ setnames(popData,
          c(paste(popCode)), 
          c("pop"))
 
-# SEARCHING FOR DATA: Human Development index
+# SEARCHING FOR DATA: Human Development Index
 hdi_inds <- WDIsearch('hdi')
 hdiCode <- hdi_inds[match
                     ("Human development index (HDI)", 
@@ -158,94 +171,89 @@ setnames(hdiData,
 panelData_1 <- merge(wagData, gdpData,
                      by.x = c("iso2c", "year", "country"), 
                      by.y = c("iso2c", "year", "country") ) 
-panelData_2 <- merge(healthData, matData,
+panelData_2 <- merge(healthData, fertData,
                      by.x = c("iso2c", "year", "country"), 
                      by.y = c("iso2c", "year", "country") ) 
-panelData_3 <- merge(popData, panelData_1,  
+panelData_3 <- merge(panelData_1, panelData_2,  
                      by.x = c("iso2c", "year", "country"), 
                      by.y = c("iso2c", "year", "country") )
-panelData_4 <- merge(popData, matData,  
+panelData_4 <- merge(eduData, panelData_3,  
                      by.x = c("iso2c", "year", "country"), 
                      by.y = c("iso2c", "year", "country") )
-panelData_5 <- merge(hdiData, panelData_3,
+panelData_5 <- merge(popData, panelData_4,  
+                     by.x = c("iso2c", "year", "country"), 
+                     by.y = c("iso2c", "year", "country") )
+panelData <- merge(hdiData, panelData_5,
                      by.x = c("country", "year"), 
                      by.y = c("country", "year") )
 
-# panelData_4 <- merge(highData, mmortData,  
-#                      by.x = c("iso2c", "year","country"), 
-#                      by.y = c("iso2c", "year", "country") )
-# panelData_5 <- merge(panelData_1, panelData_2,  
-#                      by.x = c("iso2c", "year","country"), 
-#                      by.y = c("iso2c", "year", "country") )
-# panelData_6 <- merge(panelData_3, panelData_4,
-#                      by.x = c("iso2c", "year","country"), 
-#                      by.y = c("iso2c", "year", "country") ) 
-panelData <- merge(panelData_2, panelData_5,
-                   by.x = c("iso2c", "year","country"), 
-                   by.y = c("iso2c", "year", "country") ) 
+panelData_fert <- merge(popData, fertData,  
+                        by.x = c("iso2c", "year", "country"), 
+                        by.y = c("iso2c", "year", "country") )
 
 # CLEANING AND TRANSOFMRING THE DATA------------------------------------------------------------
 
-dat <- NULL
-dt_wag <- NULL
 panelData$iso2c <- NULL
 
 up <- data.table(panelData)
-#names(up) <- c('year', 'country', 'health', 'mmort', 'pop', 'salaried', 'gdppc')
+#names(up) <- c('year', 'country', 'health', 'fert', 'pop', 'salaried', 'gdppc')
 up$pop <- up$pop/10^6 # Count the population in million
 up <- subset(up, up$year < 2017 & up$year > 1960)
 
 # Fertility rate
-up_fertility <- data.table(panelData_4)
-up_fertility$iso2c <- NULL
-names(up_fertility) <- c('year', 'country', 'pop', 'fert')
+up_fert <- data.table(panelData_fert)
+up_fert$iso2c <- NULL
+names(up_fert) <- c('year', 'country', 'pop', 'fert')
 
 # DATA EXPLORATION------------------------------------------------------------------------------
 
 # non-missing observations for each country
 bp <- subset(up,
              !is.na(up$salaried) & 
-               !is.na(up$mmort) & 
+               !is.na(up$fert) & 
                !is.na(up$pop) & 
                !is.na(up$gdppc) & 
-               !is.na(up$health) & 
+               !is.na(up$health) &
+               !is.na(up$edu) &
                !is.na(up$hdi)
 )
 
 bp %>%
   count(country) %>%
   arrange(n) %>%
-  print(n = 600)
+  print(n = 260)
 
 # non-missing observations for fertility rate
-bp_fert <- subset(up_fertility,
-             !is.na(up_fertility$fert) & 
-             !is.na(up_fertility$pop)
+bp_fert <- subset(up_fert,
+             !is.na(up_fert$fert) & 
+             !is.na(up_fert$pop)
 )
 
 bp_fert %>%
   count(country) %>%
   arrange(n) %>%
-  print(n = 600)
+  print(n = 260)
 
 # checking world trends
 world_trend <- up %>%
   group_by(year) %>%
   summarise(
     salaried = weighted.mean(salaried, na.rm = TRUE),
-    mmort = weighted.mean(mmort, w = pop, na.rm = TRUE),
+    fert = weighted.mean(fert, w = pop, na.rm = TRUE),
     health = weighted.mean(health, w = pop, na.rm = TRUE),
+    edu = weighted.mean(edu, w = pop, na.rm = TRUE),
     gdppc = weighted.mean(gdppc, w = pop, na.rm = TRUE),
     hdi = weighted.mean(hdi, w = pop, na.rm = TRUE))
 
 world_trend$rellnsalaried = log(world_trend$salaried) - first(log(world_trend$salaried))
 world_trend$rellnhealth = log(world_trend$health) - first(log(world_trend$health))
+world_trend$rellnedu = log(world_trend$edu) - first(log(world_trend$edu))
 world_trend$rellngdp = log(world_trend$gdppc) - first(log(world_trend$gdppc))
-world_trend$rellnmmort = log(world_trend$mmort) - first(log(world_trend$mmort))
+world_trend$rellnfert = log(world_trend$fert) - first(log(world_trend$fert))
 world_trend$rellnhdi = log(world_trend$hdi) - first(log(world_trend$hdi))
 
 # checking world trends for fertility rate
-world_trend_fert <- up_fertility %>%
+world_trend_fert <- bp_fert %>%
   group_by(year) %>%
   summarise(
     
@@ -253,31 +261,41 @@ world_trend_fert <- up_fertility %>%
 
 world_trend_fert$rellnfert = log(world_trend_fert$fert) - first(log(world_trend_fert$fert))
 
-# subplot (1)
-p1 <- world_trend %>%
-  ggplot(aes(year, mmort)) + 
-  geom_line(size = 1, color = 'darkgreen') + 
-  ylab('Maternal mortality ratio (per 100,000 live births)') # y-axis label
+# subplot for global fertility in years 1960-2011
 
 world_trend_fert %>%
   ggplot(aes(year, fert)) + 
-  geom_point(color = "deepskyblue3") +
-  geom_smooth(method = "lm", se = FALSE) + 
+  geom_line(color = "deepskyblue3", size = 1) +
+  #geom_point(color = "deepskyblue3") +
+  #geom_smooth(method = "lm", se = FALSE) + 
   labs(
     x ="years",
     y = "Fertility rate, total (births per woman)",
     title ="Total fertility rate (births per woman) in years 1960-2011")
 
+up_int %>%
+  group_by(country) %>%
+  ggplot(aes(year, fert)) + 
+  geom_line(aes(color = country, linetype = country), size = 1) +
+  ylab('Total fertility rate (births per woman) in years 1960-2011')
+
+# subplot (1)
+p1 <- world_trend_fert %>%
+  ggplot(aes(year, fert)) + 
+  geom_line(size = 1, color = 'darkgreen') + 
+  ylab('Fertility rate, total (births per woman)')
+
 # subplot (2)
 p2 <- world_trend %>%
   ggplot(aes(x = year)) +
-  geom_line(aes(y = rellnmmort), size = 1, linetype = 'dotted', color = 'darkgreen') +
+  geom_line(aes(y = rellnfert), size = 1, linetype = 'dotted', color = 'darkgreen') +
   geom_line(aes(y = rellnsalaried), size = 1, linetype = 'dashed', color = 'firebrick') +
   geom_text(x = 2004, y = -0.25, label = 'Maternal mortality ratio (per 100,000 live births)', color = 'darkgreen') +
   geom_text(x = 2009, y = -0.05, label = 'salaried female (% of total emolyed)', color = 'firebrick') +
   ylab('log change from 1995')
 
 # arrange these two subplots
+
 grid.arrange(p1, p2)
 
 # subplot (3)
@@ -289,7 +307,7 @@ p3 <- world_trend %>%
 # subplot (4)
 p4 <- world_trend %>%
   ggplot(aes(x = year)) +
-  geom_line(aes(y = rellnmmort), size = 1, linetype = 'dotted', color = 'darkgreen') +
+  geom_line(aes(y = rellnfert), size = 1, linetype = 'dotted', color = 'darkgreen') +
   geom_line(aes(y = rellnhealth), size = 1, linetype = 'dashed', color = 'deepskyblue3') +
   geom_text(x = 2004, y = -0.25, label = 'Maternal mortality ratio (per 100,000 live births)', color = 'darkgreen') +
   geom_text(x = 2006, y = 0.01, label = 'Healthcare expenditure (% of GDP)', color = 'deepskyblue3') +
@@ -300,8 +318,8 @@ grid.arrange(p3, p4)
 
 # country-specific trends: selected countries, difference between 1995 and 2014
 interesting_countries <- c(
-  "United Kingdom", "Turkey", "Malaysia", "Hungary", 
-  "Pakistan", "venezuela", "El Salvador", "Macedonia, FYR", "Mexico"
+  "Rwanda", "Kenya", "Philippines", "Hungary", 
+  "China", "Luxembourg", "Yemen, Rep.", "United Kingdom", "United States"
 )
 
 up_int <- subset(up, up$country %in% interesting_countries, na.rm = TRUE)
@@ -313,7 +331,7 @@ p5 <- up_int %>%
 
 p6 <- up_int %>%
   group_by(country) %>%
-  ggplot(aes(year, mmort)) + 
+  ggplot(aes(year, fert)) + 
   geom_line(aes(color = country, linetype = country), size = 1) +
   ylab('Maternal mortality ratio (per 100,000 live births)')
 
@@ -326,10 +344,17 @@ p7 <- up_int %>%
 # arrange these three subplots
 grid.arrange(p5, p6, p7)
 
+# Change in fertility rate in countries of interest
+up_int %>%
+  group_by(country) %>%
+  ggplot(aes(year, fert)) + 
+  geom_line(aes(color = country, linetype = country), size = 1) +
+  ylab('Total fertility rate (births per woman) in years 1960-2011')
+
 
 # examining the balanced panel with no missing values on key variables
 
-ggplot(bp) + aes(x = mmort) +
+ggplot(bp) + aes(x = fert) +
   geom_histogram (binwidth = 20, 
                   fill ='darkgreen') +
   labs(
@@ -371,118 +396,34 @@ stargazer(
   title = "Descriptive Statistics for the variables in the balanced panel")
 
 up$lngdppc <- log(up$gdppc)
-up$lnmmort <- log(up$mmort)
+up$lnfert <- log(up$fert)
 up$lnpop <- log(up$pop)
 up$lnhealth <- log(up$health)
-up$lnhdi <- log(up$hdi)
-
-
-miss_lnmmort <- merge(up[, mean(mmort, na.rm = TRUE), by = country],
-                      up[is.na(mmort), .N, by = country], by = "country", 
-                      all = TRUE)
-
-miss_salaried <- merge(up[, mean(salaried, na.rm = TRUE), by = country],
-                       up[is.na(salaried), .N, by = country], by = "country", 
-                       all = TRUE)
-
-miss_lngdppc <- merge(up[, mean(lngdppc, na.rm = TRUE), by = country],
-                      up[is.na(lngdppc), .N, by = country], by = "country", 
-                      all = TRUE)
-
-miss_health <- merge(up[, mean(health, na.rm = TRUE), by = country],
-                     up[is.na(health), .N, by = country], by = "country", 
-                     all = TRUE)
-
-ggplot(miss_lnmmort) + aes(x = N) +
-  geom_histogram (binwidth = 0.1, 
-                  fill ='darkgreen') +
-  labs(
-    x ="Average number of missing observations",
-    title ="Dist. of avg. missing obs. of Log Maternal mortality") +
-  theme_bw()
-
-ggplot(miss_salaried) + aes(x = N) +
-  geom_histogram (binwidth = 1, 
-                  fill ='firebrick') +
-  labs(
-    x ="Average number of missing observations",
-    title ="Dist. of avg. missing obs. of Ratio of salaried female workers") +
-  theme_bw()
-
-ggplot(miss_lngdppc) + aes(x = N) +
-  geom_histogram (binwidth = 1, 
-                  fill ='grey') +
-  labs(
-    x ="Average number of missing observations",
-    title ="Dist. of avg. missing obs. of Log GDP per capita") +
-  theme_bw()
-
-ggplot(miss_health) + aes(x = N) +
-  geom_histogram (binwidth = 1, 
-                  fill ='deepskyblue3') +
-  labs(
-    x ="Average number of missing observations",
-    title ="Dist. of avg. missing obs. of Healthcare expenditure (% of GDP)") +
-  theme_bw()
-
-ggplot(miss_lnmmort, aes(y = V1, x = N)) + 
-  geom_point(color = "darkgreen") +
-  geom_smooth(method = "lm", se = FALSE) + 
-  labs(
-    x ="Average number of missing observations",
-    y = "Mean Log Maternal Mortality",
-    title ="Mean Log Maternal mortality in years 1995-2014") +
-  theme_bw()
-
-ggplot(miss_salaried, aes(y = V1, x = N)) + 
-  geom_point(color = "firebrick") +
-  geom_smooth(method = "lm", se = FALSE) + 
-  labs(
-    x ="Average number of missing observations",
-    y = "Mean Ratio of salaried female workers",
-    title ="Mean Ratio of salaried female workers in years 1995-2014") +
-  theme_bw()
-
-ggplot(miss_lngdppc, aes(y = V1, x = N)) + 
-  geom_point(color = "grey") +
-  geom_smooth(method = "lm", se = FALSE) + 
-  labs(
-    x ="Average number of missing observations",
-    y = "Mean Log GDP per capita",
-    title ="Mean Log GDP per capita in years 1995-2014") +
-  theme_bw()
-
-ggplot(miss_health, aes(y = V1, x = N)) + 
-  geom_point(color = "deepskyblue3") +
-  geom_smooth(method = "lm", se = FALSE) + 
-  labs(
-    x ="Average number of missing observations",
-    y = "Mean Health expenditure (% of GDP)",
-    title ="Mean Health expenditure (% of GDP) in years 1995-2014") +
-  theme_bw()
+up$lnedu <- log(up$edu)
 
 # ANALYSIS--------------------------------------------------------------------------------------
 
 # xcountry OLS: pooled OLS regardless country difference
 dt <- up[, .(
   m_salaried = mean(salaried, na.rm = TRUE),
-  m_lnmmort= mean(lnmmort, na.rm = TRUE),
+  m_lnfert= mean(lnfert, na.rm = TRUE),
   m_lngdppc = mean(lngdppc, na.rm = TRUE),
   m_lnpop = mean(lnpop, na.rm = TRUE),
-  m_lnhealth = mean(lnhealth, na.rm = TRUE)),
+  m_lnhealth = mean(lnhealth, na.rm = TRUE),
+  m_lnedu = mean(lnedu, na.rm = TRUE)),
   by = .(country)]
 
-p8 <- ggplot(dt, aes(x = m_salaried, y = m_lnmmort)) +
+p8 <- ggplot(dt, aes(x = m_salaried, y = m_lnfert)) +
   geom_point(size = 1.5, aes(col = (m_lnhealth))) +
   geom_smooth() +
   labs(
     x = "Average salaried female workers (% of total) per country",
-    y = "Average Log Maternal Mortality per country",
+    y = "Average Log Fertility rate per country",
     title ="Average Log Maternal Mortality on salaried female workers (% of total)") +
   scale_color_distiller("Log Health expenditure (% of GDP)", palette = "Spectral") +
   theme_bw()
 
-p9 <- ggplot(dt, aes(x = m_salaried, y = m_lnmmort)) +
+p9 <- ggplot(dt, aes(x = m_salaried, y = m_lnfert)) +
   geom_point(size = 1.5, aes(col = (m_lngdppc))) +
   geom_smooth() +
   labs(
@@ -496,13 +437,13 @@ grid.arrange(p8, p9)
 
 
 # OLS regressions
-ols1995 <- lm(data = up[year == 1995], lnmmort ~ salaried)
-ols2007 <- lm(data = up[year == 2007], lnmmort ~ salaried)
-ols2014 <- lm(data = up[year == 2014], lnmmort ~ salaried)
-ols2007_c1 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhealth + lnpop)
-ols2007_c2 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnpop)
-ols2007_c3 <- lm(data = up[year == 2007], lnmmort ~ salaried + lngdppc + lnhealth + lnpop + lnhdi)
-ols2007_c4 <- lm(data = up[year == 2007], lnmmort ~ salaried + lnhdi)
+ols1995 <- lm(data = up[year == 1995], lnfert ~ salaried)
+ols2007 <- lm(data = up[year == 2007], lnfert ~ salaried)
+ols2014 <- lm(data = up[year == 2014], lnfert ~ salaried)
+ols2007_c1 <- lm(data = up[year == 2007], lnfert ~ salaried + lnhealth + lnpop + lnedu)
+ols2007_c2 <- lm(data = up[year == 2007], lnfert ~ salaried + lngdppc + lnhealth + lnpop + lnedu)
+ols2007_c3 <- lm(data = up[year == 2007], lnfert ~ salaried + lngdppc + lnhealth + lnpop + lnedu + lnhdi)
+ols2007_c4 <- lm(data = up[year == 2007], lnfert ~ salaried + lnhdi)
 
 
 ols_models <- list(ols1995, ols2007, ols2014, ols2007_c1, ols2007_c2, ols2007_c3, ols2007_c4)
@@ -540,19 +481,19 @@ stargazer(
 # FE with explicit time dummies
 
 fe1 <- plm( 
-  lnmmort ~ salaried + year, data = up, 
+  lnfert ~ salaried + year, data = up, 
   model = 'within')
 
 fe2 <- plm( 
-  lnmmort ~ salaried + lngdppc + year, data = up, 
+  lnfert ~ salaried + lngdppc + year, data = up, 
   model = 'within')
 
 fe3 <- plm( 
-  lnmmort ~ salaried + lnhealth + year, data = up, 
+  lnfert ~ salaried + lnhealth + lnedu + year, data = up, 
   model = 'within')
 
 fe4 <- plm( 
-  lnmmort ~ salaried + lngdppc + lnhealth + lnpop + year, data = up, 
+  lnfert ~ salaried + lngdppc + lnhealth + lnedu + lnpop + year, data = up, 
   model = 'within')
 
 fe_models <- list(fe1, fe2, fe3, fe4)
@@ -585,22 +526,22 @@ stargazer(
 # FD with explicit time dummies and lags
 
 diff1 <- plm(
-  diff(lnmmort) ~ diff(salaried) + year, 
+  diff(lnfert) ~ diff(salaried) + year, 
   data = up, model = 'pooling'
 )
 
 diff2 <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + year,
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + year,
   data = up, model = 'pooling'
 )
 
 diff3 <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:4) + year, 
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:4) + year, 
   data = up, model = 'pooling'
 )
 
 diff4 <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:6) + year,
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:6) + year,
   data = up, model = 'pooling'
 )
 
@@ -635,13 +576,14 @@ stargazer(
 # FD with explicit time dummies, lags and controls
 
 diff_c1 <- plm(
-  diff(lnmmort) ~ diff(salaried) + year + diff(lnhealth) + diff(lngdppc) + diff(pop), 
+  diff(lnfert) ~ diff(salaried) + year + diff(lnhealth) + diff(lnedu) + diff(lngdppc) + diff(pop), 
   data = up, model = 'pooling'
 )
 
 diff_c2 <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
     stats::lag(diff(lnhealth), 1:2) + 
+    stats::lag(diff(lnedu), 1:2) + 
     stats::lag(diff(lngdppc), 1:2) + 
     stats::lag(diff(lnpop), 1:2) + 
     year,
@@ -649,8 +591,9 @@ diff_c2 <- plm(
 )
 
 diff_c3 <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:4) +
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:4) +
     stats::lag(diff(lnhealth), 1:4) + 
+    stats::lag(diff(lnedu), 1:4) + 
     stats::lag(diff(lngdppc), 1:4) + 
     stats::lag(diff(lnpop), 1:4) + 
     year, 
@@ -686,23 +629,24 @@ stargazer(
 
 # Multiple models
 
-multiple_models = list(ols2007_c, fe4, diff2, diff_c2)
+multiple_models = list(ols2007_c1, fe4, diff2, diff_c2)
 
 stargazer(
   title = "Comparing multiple models", 
   list(multiple_models), digits = 2, 
-  column.labels = c('OLS2007c', 'FE4c', 'FD2', 'FD2c'),
+  column.labels = c('OLS2007c1', 'FE4c', 'FD2', 'FD2c'),
   model.names = FALSE,
   omit.stat = c("adj.rsq", "f", "ser"),
-  dep.var.caption = 'Dependent variable: Log Maternal mortality',
+  dep.var.caption = 'Dependent variable: Log Fertility rate',
   out = "Multiple.html",
   notes.align = "l",
   se = list(rob_ols_4, rob_fe_4, rob_fd_2, rob_fdc_2),
   dep.var.labels.include = FALSE,
   header = FALSE, 
   type ='latex',
-  omit = c('year', 'lngdppc', 'lnhealth', 'lnpop', 
+  omit = c('year', 'lngdppc', 'lnhealth', 'lnpop', 'lnedu',
            'stats::lag(diff(lnhealth), 1:2)', 
+           'stats::lag(diff(lnedu), 1:2)', 
            'stats::lag(diff(lngdppc), 1:2)',
            'stats::lag(diff(lnpop), 1:2)')
 )
@@ -711,20 +655,21 @@ stargazer(
 
 # Group 1
 up %>% 
-  select(salaried, gdppc, pop) %>%
+  select(salaried, gdppc, pop, hdi_rank) %>%
   as.data.frame() %>%
   stargazer(
     type = 'text', flip = TRUE, digits = 1,
     summary.stat = c('mean', 'min', 'median', 'p25', 'p75', 'max', 'n')
   )
 
-up$group <- ifelse(up$gdppc <= 8500,1,2)
+up$group <- ifelse(up$hdi_rank <= 90.5,1,2)
 up_1 <- subset(up, up$group == 1)
 up_2 <- subset(up, up$group == 2)
 
 g_fd2c <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
     stats::lag(diff(lnhealth), 1:2) + 
+    stats::lag(diff(lnedu), 1:2) + 
     stats::lag(diff(lngdppc), 1:2) + 
     stats::lag(diff(lnpop), 1:2) + 
     year,
@@ -732,15 +677,16 @@ g_fd2c <- plm(
 )
 
 g_fe4c <- plm( 
-  lnmmort ~ salaried + lngdppc + lnhealth + lnpop + year, 
+  lnfert ~ salaried + lngdppc + lnhealth + lnedu + lnpop + year, 
   data = up_1, 
   model = 'within')
 
 # Group 2
 
 gg_fd2c <- plm(
-  diff(lnmmort) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
+  diff(lnfert) ~ diff(salaried) + stats::lag(diff(salaried), 1:2) + 
     stats::lag(diff(lnhealth), 1:2) + 
+    stats::lag(diff(lnedu), 1:2) + 
     stats::lag(diff(lngdppc), 1:2) + 
     stats::lag(diff(lnpop), 1:2) + 
     year,
@@ -748,7 +694,7 @@ gg_fd2c <- plm(
 )
 
 gg_fe4c <- plm( 
-  lnmmort ~ salaried + lngdppc + lnhealth + lnpop + year, 
+  lnfert ~ salaried + lngdppc + lnhealth + lnedu + lnpop + year, 
   data = up_2, 
   model = 'within')
 
@@ -775,8 +721,9 @@ stargazer(
   dep.var.labels.include = FALSE,
   header = FALSE, 
   type ='latex',
-  omit = c('year', 'lngdppc', 'lnhealth', 'lnpop', 
+  omit = c('year', 'lngdppc', 'lnhealth', 'lnpop', 'lnedu',
            'stats::lag(diff(lnhealth), 1:2)', 
+           'stats::lag(diff(lnedu), 1:2)', 
            'stats::lag(diff(lngdppc), 1:2)',
            'stats::lag(diff(lnpop), 1:2)')
 )
